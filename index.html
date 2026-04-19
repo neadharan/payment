@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Consumer Data</title>
+
+<style>
+body { font-family: Arial; margin: 0; background: #d6dde6; }
+
+.header { display:flex; background:#3e69ad; color:rgb(223, 198, 198); padding:10px; align-items:center; }
+.logo { width:60px; border-radius:50%; }
+.title { flex:1; text-align:center; }
+.title h2,.title h3 {margin: 2px 0;}
+
+.home { background:#5f6f89; padding:5px 10px; cursor:pointer; border-radius:5px; }
+
+.icons {
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+  padding:10px;
+  background:#d9e1ec;
+}
+
+.icon {
+  text-align:center;
+  cursor:pointer;
+  background:#d6dde6;
+  border-radius:10px;
+  padding:8px;
+}
+
+.icon img { width:40px; height:40px; }
+
+.selectedMenu {
+  display:none;
+  padding:10px;
+  background:#d9e1ec;
+}
+
+.panel {
+  display:none;
+  background:#e6edf5;
+  margin:10px;
+  padding:10px;
+}
+
+input { padding:6px; margin:3px; }
+button { padding:6px; }
+
+.table-box { background:white; margin:10px; padding:10px; }
+
+table { width:100%; border-collapse:collapse; }
+
+th { background:#5f6f89; color:white; }
+
+td, th { border:1px solid #ccc; padding:5px; }
+
+.card {
+  background:white;
+  margin:10px;
+  padding:10px;
+  border-radius:10px;
+}
+</style>
+
+</head>
+<body>
+
+<div class="header">
+  <img src="nea.gif" class="logo">
+  <div class="title">
+    <h2>Nepal Elecricity Authority</h2>
+    <h2>Dharan Dcs</h2>
+    <h3>Consumer Details & Payment_Due Check</h3>
+  </div>
+  <div class="home" onclick="goHome()">Home</div>
+</div>
+
+<div class="icons" id="iconsBox">
+  <div class="icon" onclick="openMenu('payment')"><img src="t1.gif"><br>Payment</div>
+  <div class="icon" onclick="openMenu('history')"><img src="t2.gif"><br>History</div>
+  <div class="icon" onclick="openMenu('Test App')"><img src="icon1.gif"><br>Test App</div>
+  <div class="icon" onclick="openMenu('Test App')"><img src="icon2.gif"><br>Test App</div>
+  <div class="icon" onclick="openMenu('Test App')"><img src="icon5.gif"><br>Test App</div>
+  <div class="icon" onclick="openMenu('Test App')"><img src="icon6.gif"><br>Test App</div>
+  <div class="icon" onclick="openMenu('Test App')"><img src="icon7.gif"><br>Test App</div>
+  <div class="icon" onclick="openMenu('Test App')"><img src="icon8.gif"><br>Test App</div>
+</div>
+
+<div class="selectedMenu" id="selectedMenu"></div>
+
+<div class="panel" id="searchPanel">
+  ID: <input type="text" id="idSearch">
+  SCNO: <input type="text" id="scnoSearch">
+  <button onclick="searchData()">Search</button>
+</div>
+
+<div id="output"></div>
+
+<script>
+let paymentData = [];
+let historyData = [];
+let mode = "";
+
+// 🔥 SAFE LOAD (GitHub FIX)
+function loadAllData() {
+  let t = new Date().getTime();
+
+  fetch("./dharan.csv?v="+t)
+    .then(r=>{
+      if(!r.ok) throw "CSV1 not found";
+      return r.text();
+    })
+    .then(t=>paymentData=t.split("\n").map(r=>r.split(",")))
+    .catch(e=>console.log("Payment CSV Error:",e));
+
+  fetch("./dharan1.csv?v="+t)
+    .then(r=>{
+      if(!r.ok) throw "CSV2 not found";
+      return r.text();
+    })
+    .then(t=>historyData=t.split("\n").map(r=>r.split(",")))
+    .catch(e=>console.log("History CSV Error:",e));
+}
+loadAllData();
+
+// 🔥 FIX: wait DOM ready
+document.addEventListener("DOMContentLoaded",function(){
+
+  document.querySelectorAll(".icon").forEach(icon=>{
+    icon.addEventListener("click",function(){
+      document.getElementById("iconsBox").style.display="none";
+
+      document.getElementById("selectedMenu").style.display="block";
+      document.getElementById("selectedMenu").innerHTML=this.outerHTML;
+    });
+  });
+
+});
+
+// MENU OPEN
+function openMenu(m){
+  mode = m;
+  document.getElementById("searchPanel").style.display="block";
+  document.getElementById("output").innerHTML="";
+  document.getElementById("idSearch").value="";
+  document.getElementById("scnoSearch").value="";
+
+  if(m==="Test App"){
+    document.getElementById("searchPanel").style.display="none";
+    document.getElementById("output").innerHTML="<div class='table-box'></div>";
+  }
+}
+
+// HOME
+function goHome(){
+  mode="";
+  document.getElementById("output").innerHTML="";
+  document.getElementById("searchPanel").style.display="none";
+
+  document.getElementById("iconsBox").style.display="grid";
+  document.getElementById("selectedMenu").style.display="none";
+  document.getElementById("selectedMenu").innerHTML="";
+}
+
+// SEARCH FUNCTION (same)
+function searchData(){
+  let idVal=document.getElementById("idSearch").value.trim();
+  let scnoVal=document.getElementById("scnoSearch").value.trim().toLowerCase();
+
+  let html="";
+  let total=0;
+
+  if(mode==="payment"){
+    html+="<div class='table-box'><table>";
+    html+="<tr><th>SCNO</th><th>ID</th><th>NAME</th><th>MONTH</th><th>DUE</th><th>PENALTY & REBATE</th><th>TOTAL</th></tr>";
+
+    for(let i=1;i<paymentData.length;i++){
+      let r=paymentData[i];
+
+      let id=r[1]?.trim();
+      let scno=r[0]?.trim().toLowerCase();
+
+      if((idVal && id===idVal)||(scnoVal && scno===scnoVal)){
+        html+="<tr>";
+        html+="<td>"+r[0]+"</td>";
+        html+="<td>"+r[1]+"</td>";
+        html+="<td>"+r[2]+"</td>";
+        html+="<td>"+r[5]+"</td>";
+        html+="<td>"+r[8]+"</td>";
+        html+="<td>"+r[10]+"</td>";
+        html+="<td>"+r[11]+"</td>";
+        html+="</tr>";
+
+        let amt=parseFloat(r[11]);
+        if(!isNaN(amt)) total+=amt;
+      }
+    }
+
+    html+="</table><h3>Total Amount: "+total+"</h3></div>";
+  }
+
+  if(mode==="history"){
+    for(let i=1;i<historyData.length;i++){
+      let r=historyData[i];
+
+      let id=r[0]?.trim();
+      let scno=r[1]?.trim().toLowerCase();
+
+      if((idVal && id===idVal)||(scnoVal && scno===scnoVal)){
+        html+="<div class='card'>";
+        html+="<h3>"+r[2]+"</h3>";
+        html+="<p>ID:- "+r[0]+"</p>";
+        html+="<p>SCNO:- "+r[1]+"</p>";
+        html+="<p>Present_Rdg:- "+r[3]+"</p>";
+        html+="<p>Prve_Rdg:- "+r[4]+"</p>";
+        html+="<p>Rdg_Year:- "+r[5]+"</p>";
+        html+="<p>Rdg_Month:- "+r[6]+"</p>";
+        html+="<p>CATEGORY:- "+r[9]+"</p>";
+        html+="<p>LOAD:- "+r[13]+"</p>";
+        html+="<p>Meter_No:- "+r[16]+"</p>";
+        html+="</div>";
+      }
+    }
+  }
+
+  document.getElementById("output").innerHTML=html;
+}
+</script>
+
+</body>
+</html>
