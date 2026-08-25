@@ -45,8 +45,8 @@ body { font-family: Arial; margin: 0; background: #d6dde6; }
   padding:10px;
 }
 
-input { padding:6px; margin:3px; }
-button { padding:6px; }
+input, select { padding:6px; margin:3px; }
+button { padding:6px; margin:3px; }
 
 .table-box { background:white; margin:10px; padding:10px; }
 
@@ -61,6 +61,16 @@ td, th { border:1px solid #ccc; padding:5px; }
   margin:10px;
   padding:10px;
   border-radius:10px;
+}
+
+.avgbox {
+  background:#fff3cd;
+  border:1px solid #e0c36b;
+  border-radius:8px;
+  padding:8px 12px;
+  margin-top:8px;
+  display:inline-block;
+  font-weight:bold;
 }
 </style>
 
@@ -80,7 +90,7 @@ td, th { border:1px solid #ccc; padding:5px; }
 <div class="icons" id="iconsBox">
   <div class="icon" onclick="openMenu('payment')"><img src="t1.gif"><br>Payment</div>
   <div class="icon" onclick="openMenu('history')"><img src="t2.gif"><br>History</div>
-  <div class="icon" onclick="openMenu('Test App')"><img src="icon1.gif"><br>Test App</div>
+  <div class="icon" onclick="openMenu('report')"><img src="icon1.gif"><br>Report</div>
   <div class="icon" onclick="openMenu('Test App')"><img src="icon2.gif"><br>Test App</div>
   <div class="icon" onclick="openMenu('Test App')"><img src="icon5.gif"><br>Test App</div>
   <div class="icon" onclick="openMenu('Test App')"><img src="icon6.gif"><br>Test App</div>
@@ -94,6 +104,15 @@ td, th { border:1px solid #ccc; padding:5px; }
   ID: <input type="text" id="idSearch">
   SCNO: <input type="text" id="scnoSearch">
   <button onclick="searchData()">Search</button>
+</div>
+
+<div class="panel" id="reportPanel">
+  Area: <select id="areaSelect"></select>
+  Route: <select id="routeSelect"></select>
+  Unit Range: <input type="number" id="unitMin" placeholder="Min" style="width:70px;">
+  to <input type="number" id="unitMax" placeholder="Max" style="width:70px;">
+  <button onclick="searchReport()">Search</button>
+  <button onclick="clearReport()">Clear</button>
 </div>
 
 <div id="output"></div>
@@ -137,15 +156,55 @@ document.addEventListener("DOMContentLoaded",function(){
     });
   });
 
+  // Populate Area dropdown: 001 to 018
+  let areaSel = document.getElementById("areaSelect");
+  let areaDefault = document.createElement("option");
+  areaDefault.value = "";
+  areaDefault.text = "-- Select Area --";
+  areaSel.appendChild(areaDefault);
+  for(let i=1;i<=18;i++){
+    let val = String(i).padStart(3,"0");
+    let opt = document.createElement("option");
+    opt.value = val;
+    opt.text = val;
+    areaSel.appendChild(opt);
+  }
+
+  // Populate Route dropdown: Route-1 to Route-29
+  let routeSel = document.getElementById("routeSelect");
+  let routeDefault = document.createElement("option");
+  routeDefault.value = "";
+  routeDefault.text = "-- Select Route --";
+  routeSel.appendChild(routeDefault);
+  for(let i=1;i<=29;i++){
+    let opt = document.createElement("option");
+    opt.value = String(i);
+    opt.text = "Route-"+i;
+    routeSel.appendChild(opt);
+  }
+
 });
 
 // MENU OPEN
 function openMenu(m){
   mode = m;
-  document.getElementById("searchPanel").style.display="block";
+  document.getElementById("searchPanel").style.display="none";
+  document.getElementById("reportPanel").style.display="none";
   document.getElementById("output").innerHTML="";
   document.getElementById("idSearch").value="";
   document.getElementById("scnoSearch").value="";
+
+  if(m==="payment" || m==="history"){
+    document.getElementById("searchPanel").style.display="block";
+  }
+
+  if(m==="report"){
+    document.getElementById("reportPanel").style.display="block";
+    document.getElementById("areaSelect").value="";
+    document.getElementById("routeSelect").value="";
+    document.getElementById("unitMin").value="";
+    document.getElementById("unitMax").value="";
+  }
 
   if(m==="Test App"){
     document.getElementById("searchPanel").style.display="none";
@@ -158,6 +217,7 @@ function goHome(){
   mode="";
   document.getElementById("output").innerHTML="";
   document.getElementById("searchPanel").style.display="none";
+  document.getElementById("reportPanel").style.display="none";
 
   document.getElementById("iconsBox").style.display="grid";
   document.getElementById("selectedMenu").style.display="none";
@@ -226,6 +286,111 @@ function searchData(){
   }
 
   document.getElementById("output").innerHTML=html;
+}
+
+// Helper: extract leading number from a string like "01", "01kha1", "023KHA1" -> 1, 1, 23
+// Returns NaN if no leading digits found
+function extractLeadingNumber(str){
+  if(!str) return NaN;
+  let m = String(str).trim().match(/^(\d+)/);
+  return m ? parseInt(m[1],10) : NaN;
+}
+
+// REPORT SEARCH FUNCTION
+// SCNO format expected: AREA.ROUTE.SEQ  e.g. 001.23.034  (SEQ may contain letters, e.g. 001.01.02kha1)
+function searchReport(){
+  let areaVal = document.getElementById("areaSelect").value.trim();
+  let routeVal = document.getElementById("routeSelect").value.trim();
+  let unitMinVal = document.getElementById("unitMin").value.trim();
+  let unitMaxVal = document.getElementById("unitMax").value.trim();
+
+  let unitMin = unitMinVal !== "" ? parseFloat(unitMinVal) : null;
+  let unitMax = unitMaxVal !== "" ? parseFloat(unitMaxVal) : null;
+
+  if(!areaVal && !routeVal && unitMin===null && unitMax===null){
+    document.getElementById("output").innerHTML = "<p style='margin:10px;'>कृपया Area, Route वा Unit Range मध्ये कुनै एउटा छान्नुहोस्।</p>";
+    return;
+  }
+
+  let html = "<div class='table-box'><table>";
+  html += "<tr><th>SCNO</th><th>ID</th><th>NAME</th><th>PREV_RDG</th><th>PRESENT_RDG</th><th>UNIT</th><th>CATEGORY</th><th>LOAD</th><th>AVG UNIT</th></tr>";
+
+  let unitSum = 0;
+  let count = 0;
+
+  for(let i=1;i<historyData.length;i++){
+    let r = historyData[i];
+    if(!r || r.length < 16) continue;
+
+    let scno = r[1]?.trim();
+    if(!scno) continue;
+
+    let parts = scno.split(".");
+    let area = parts[0]?.trim();
+    let route = parts[1]?.trim();
+
+    // Compare using only the leading numeric part, so formats like
+    // "01", "1", "01kha1", "023KHA1" all match correctly regardless of
+    // leading zeros or letters attached to area/route/seq.
+    let areaNum = extractLeadingNumber(area);
+    let routeNum = extractLeadingNumber(route);
+
+    let areaMatch = areaVal ? (areaNum === parseInt(areaVal,10)) : true;
+    let routeMatch = routeVal ? (routeNum === parseInt(routeVal,10)) : true;
+
+    let avgUnitCol = r[15] !== undefined ? r[15].trim() : ""; // Column P (index 15)
+    let avgUnitNum = parseFloat(avgUnitCol);
+
+    // Unit Range filter based on the Average Unit column
+    let rangeMatch = true;
+    if(unitMin!==null || unitMax!==null){
+      if(isNaN(avgUnitNum)){
+        rangeMatch = false;
+      } else {
+        if(unitMin!==null && avgUnitNum < unitMin) rangeMatch = false;
+        if(unitMax!==null && avgUnitNum > unitMax) rangeMatch = false;
+      }
+    }
+
+    if(areaMatch && routeMatch && rangeMatch){
+      let prevRdg = parseFloat(r[4]);
+      let presentRdg = parseFloat(r[3]);
+      let unit = (!isNaN(prevRdg) && !isNaN(presentRdg)) ? (presentRdg - prevRdg) : "";
+
+      html += "<tr>";
+      html += "<td>"+r[1]+"</td>";
+      html += "<td>"+r[0]+"</td>";
+      html += "<td>"+r[2]+"</td>";
+      html += "<td>"+r[4]+"</td>";
+      html += "<td>"+r[3]+"</td>";
+      html += "<td>"+unit+"</td>";
+      html += "<td>"+r[9]+"</td>";
+      html += "<td>"+r[13]+"</td>";
+      html += "<td>"+avgUnitCol+"</td>";
+      html += "</tr>";
+
+      if(unit !== "" && !isNaN(unit)){
+        unitSum += unit;
+        count++;
+      }
+    }
+  }
+
+  html += "</table>";
+
+  let overallAvg = count > 0 ? (unitSum / count).toFixed(2) : 0;
+  html += "<div class='avgbox'>Average Unit (Calculated): "+overallAvg+"</div>";
+  html += "</div>";
+
+  document.getElementById("output").innerHTML = html;
+}
+
+function clearReport(){
+  document.getElementById("areaSelect").value = "";
+  document.getElementById("routeSelect").value = "";
+  document.getElementById("unitMin").value = "";
+  document.getElementById("unitMax").value = "";
+  document.getElementById("output").innerHTML = "";
 }
 </script>
 
