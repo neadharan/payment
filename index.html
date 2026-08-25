@@ -313,7 +313,7 @@ function searchReport(){
   }
 
   let html = "<div class='table-box'><table>";
-  html += "<tr><th>SCNO</th><th>ID</th><th>NAME</th><th>PREV_RDG</th><th>PRESENT_RDG</th><th>UNIT</th><th>CATEGORY</th><th>LOAD</th><th>AVG UNIT</th></tr>";
+  html += "<tr><th>SCNO</th><th>ID</th><th>NAME</th><th>PREV_RDG</th><th>PRESENT_RDG</th><th>UNIT</th><th>RDG_YEAR</th><th>RDG_MONTH</th><th>CATEGORY</th><th>LOAD</th><th>AVG UNIT</th></tr>";
 
   let unitSum = 0;
   let count = 0;
@@ -364,6 +364,8 @@ function searchReport(){
       html += "<td>"+r[4]+"</td>";
       html += "<td>"+r[3]+"</td>";
       html += "<td>"+unit+"</td>";
+      html += "<td>"+r[5]+"</td>";
+      html += "<td>"+r[6]+"</td>";
       html += "<td>"+r[9]+"</td>";
       html += "<td>"+r[13]+"</td>";
       html += "<td>"+avgUnitCol+"</td>";
