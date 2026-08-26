@@ -113,6 +113,13 @@ td, th { border:1px solid #ccc; padding:5px; }
   to <input type="number" id="unitMax" placeholder="Max" style="width:70px;">
   <button onclick="searchReport()">Search</button>
   <button onclick="clearReport()">Clear</button>
+
+  <hr>
+
+  RDG Year: <select id="yearSelect"></select>
+  Month (आधार): <select id="monthASelect"></select>
+  Month (तुलना): <select id="monthBSelect"></select>
+  <button onclick="checkRdgStatus()">RDG Status हेर्नुहोस्</button>
 </div>
 
 <div id="output"></div>
@@ -139,10 +146,47 @@ function loadAllData() {
       if(!r.ok) throw "CSV2 not found";
       return r.text();
     })
-    .then(t=>historyData=t.split("\n").map(r=>r.split(",")))
+    .then(t=>{
+      historyData=t.split("\n").map(r=>r.split(","));
+      populateYearMonthSelects();
+    })
     .catch(e=>console.log("History CSV Error:",e));
 }
 loadAllData();
+
+// Build Year / Month dropdown options from the actual RDG_YEAR (col 5) and
+// RDG_MONTH (col 6) values found in the CSV, since months are not fixed
+// 1-12 in sequence (data may have 4,5,7,8,9,10,11,12 etc.)
+function populateYearMonthSelects(){
+  let years = new Set();
+  let months = new Set();
+
+  for(let i=1;i<historyData.length;i++){
+    let r = historyData[i];
+    if(!r) continue;
+    let y = r[5]?.trim();
+    let m = r[6]?.trim();
+    if(y) years.add(y);
+    if(m) months.add(m);
+  }
+
+  let yearSel = document.getElementById("yearSelect");
+  yearSel.innerHTML = "<option value=''>-- Select Year --</option>";
+  Array.from(years).sort().forEach(y=>{
+    let opt = document.createElement("option");
+    opt.value = y;
+    opt.text = y;
+    yearSel.appendChild(opt);
+  });
+
+  let monthOptionsHtml = "<option value=''>-- Select Month --</option>";
+  Array.from(months).sort((a,b)=>parseInt(a,10)-parseInt(b,10)).forEach(m=>{
+    monthOptionsHtml += "<option value='"+m+"'>Month-"+m+"</option>";
+  });
+
+  document.getElementById("monthASelect").innerHTML = monthOptionsHtml;
+  document.getElementById("monthBSelect").innerHTML = monthOptionsHtml;
+}
 
 // 🔥 FIX: wait DOM ready
 document.addEventListener("DOMContentLoaded",function(){
@@ -204,6 +248,9 @@ function openMenu(m){
     document.getElementById("routeSelect").value="";
     document.getElementById("unitMin").value="";
     document.getElementById("unitMax").value="";
+    document.getElementById("yearSelect").value="";
+    document.getElementById("monthASelect").value="";
+    document.getElementById("monthBSelect").value="";
   }
 
   if(m==="Test App"){
@@ -378,11 +425,7 @@ function searchReport(){
     }
   }
 
-  html += "</table>";
-
-  let overallAvg = count > 0 ? (unitSum / count).toFixed(2) : 0;
-  html += "<div class='avgbox'>Average Unit (Calculated): "+overallAvg+"</div>";
-  html += "</div>";
+  html += "</table></div>";
 
   document.getElementById("output").innerHTML = html;
 }
@@ -392,7 +435,96 @@ function clearReport(){
   document.getElementById("routeSelect").value = "";
   document.getElementById("unitMin").value = "";
   document.getElementById("unitMax").value = "";
+  document.getElementById("yearSelect").value = "";
+  document.getElementById("monthASelect").value = "";
+  document.getElementById("monthBSelect").value = "";
   document.getElementById("output").innerHTML = "";
+}
+
+// RDG STATUS CHECK
+// Compares two RDG months (for selected Area/Route/Year) and shows how many
+// consumers had RDG done in Month A vs Month B, plus how many from Month A
+// are still PENDING (not yet read) in Month B. Clicking the pending count
+// reveals the list of those specific consumers.
+function checkRdgStatus(){
+  let areaVal = document.getElementById("areaSelect").value.trim();
+  let routeVal = document.getElementById("routeSelect").value.trim();
+  let yearVal = document.getElementById("yearSelect").value.trim();
+  let monthAVal = document.getElementById("monthASelect").value.trim();
+  let monthBVal = document.getElementById("monthBSelect").value.trim();
+
+  if(!yearVal || !monthAVal || !monthBVal){
+    document.getElementById("output").innerHTML = "<p style='margin:10px;'>कृपया RDG Year, Month (आधार) र Month (तुलना) तीनैवटा छान्नुहोस्।</p>";
+    return;
+  }
+
+  let listA = [];
+  let listB = [];
+
+  for(let i=1;i<historyData.length;i++){
+    let r = historyData[i];
+    if(!r || r.length < 16) continue;
+
+    let scno = r[1]?.trim();
+    if(!scno) continue;
+
+    let parts = scno.split(".");
+    let area = parts[0]?.trim();
+    let route = parts[1]?.trim();
+
+    let areaNum = extractLeadingNumber(area);
+    let routeNum = extractLeadingNumber(route);
+
+    let areaMatch = areaVal ? (areaNum === parseInt(areaVal,10)) : true;
+    let routeMatch = routeVal ? (routeNum === parseInt(routeVal,10)) : true;
+    if(!areaMatch || !routeMatch) continue;
+
+    let y = r[5]?.trim();
+    let m = r[6]?.trim();
+
+    if(y === yearVal && m === monthAVal) listA.push(r);
+    if(y === yearVal && m === monthBVal) listB.push(r);
+  }
+
+  // Build a lookup of consumers already read in Month B (by ID + SCNO)
+  let idsInB = new Set(listB.map(r => (r[0]?.trim()||"") + "|" + (r[1]?.trim()||"")));
+
+  // Consumers read in Month A but NOT yet read in Month B = pending
+  let pendingList = listA.filter(r => !idsInB.has((r[0]?.trim()||"") + "|" + (r[1]?.trim()||"")));
+
+  let html = "<div class='table-box'>";
+  html += "<h3>RDG Status - Year: "+yearVal+"</h3>";
+  html += "<p>Month-"+monthAVal+" मा RDG भएका जम्मा Consumer: <b>"+listA.length+"</b></p>";
+  html += "<p>Month-"+monthBVal+" मा RDG भएका जम्मा Consumer: <b>"+listB.length+"</b></p>";
+  html += "<p>Month-"+monthAVal+" को आधारमा, Month-"+monthBVal+" मा RDG हुन बाँकी Consumer: ";
+  html += "<span onclick=\"togglePendingList()\" style='color:#3e69ad; text-decoration:underline; cursor:pointer; font-weight:bold;'>"+pendingList.length+"</span></p>";
+
+  html += "<div id='pendingListBox' style='display:none; margin-top:10px;'>";
+  if(pendingList.length > 0){
+    html += "<table>";
+    html += "<tr><th>SCNO</th><th>ID</th><th>NAME</th><th>CATEGORY</th><th>LOAD</th></tr>";
+    pendingList.forEach(r=>{
+      html += "<tr>";
+      html += "<td>"+r[1]+"</td>";
+      html += "<td>"+r[0]+"</td>";
+      html += "<td>"+r[2]+"</td>";
+      html += "<td>"+r[9]+"</td>";
+      html += "<td>"+r[13]+"</td>";
+      html += "</tr>";
+    });
+    html += "</table>";
+  } else {
+    html += "<p>कुनै पनि consumer बाँकी छैन।</p>";
+  }
+  html += "</div>";
+  html += "</div>";
+
+  document.getElementById("output").innerHTML = html;
+}
+
+function togglePendingList(){
+  let box = document.getElementById("pendingListBox");
+  box.style.display = (box.style.display === "none") ? "block" : "none";
 }
 </script>
 
