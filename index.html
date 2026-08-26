@@ -148,41 +148,26 @@ function loadAllData() {
     })
     .then(t=>{
       historyData=t.split("\n").map(r=>r.split(","));
-      populateYearMonthSelects();
     })
     .catch(e=>console.log("History CSV Error:",e));
 }
 loadAllData();
 
-// Build Year / Month dropdown options from the actual RDG_YEAR (col 5) and
-// RDG_MONTH (col 6) values found in the CSV, since months are not fixed
-// 1-12 in sequence (data may have 4,5,7,8,9,10,11,12 etc.)
+// Build fixed Year (2083-2125) and Month (1-12) dropdown options
 function populateYearMonthSelects(){
-  let years = new Set();
-  let months = new Set();
-
-  for(let i=1;i<historyData.length;i++){
-    let r = historyData[i];
-    if(!r) continue;
-    let y = r[5]?.trim();
-    let m = r[6]?.trim();
-    if(y) years.add(y);
-    if(m) months.add(m);
-  }
-
   let yearSel = document.getElementById("yearSelect");
   yearSel.innerHTML = "<option value=''>-- Select Year --</option>";
-  Array.from(years).sort().forEach(y=>{
+  for(let y=2083;y<=2125;y++){
     let opt = document.createElement("option");
-    opt.value = y;
-    opt.text = y;
+    opt.value = String(y);
+    opt.text = String(y);
     yearSel.appendChild(opt);
-  });
+  }
 
   let monthOptionsHtml = "<option value=''>-- Select Month --</option>";
-  Array.from(months).sort((a,b)=>parseInt(a,10)-parseInt(b,10)).forEach(m=>{
+  for(let m=1;m<=12;m++){
     monthOptionsHtml += "<option value='"+m+"'>Month-"+m+"</option>";
-  });
+  }
 
   document.getElementById("monthASelect").innerHTML = monthOptionsHtml;
   document.getElementById("monthBSelect").innerHTML = monthOptionsHtml;
@@ -226,6 +211,9 @@ document.addEventListener("DOMContentLoaded",function(){
     opt.text = "Route-"+i;
     routeSel.appendChild(opt);
   }
+
+  // Populate RDG Year (2083-2125) and Month (1-12) dropdowns
+  populateYearMonthSelects();
 
 });
 
